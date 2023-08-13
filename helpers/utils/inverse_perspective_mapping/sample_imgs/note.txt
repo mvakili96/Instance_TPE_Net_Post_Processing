@@ -1,0 +1,17 @@
+* Aug 17 2020
+* Jungwon Kang
+
+
+Note that images in 'test_set' are from TuSimple Lane Detection Challenge [https://github.com/TuSimple/tusimple-benchmark/tree/master/doc/lane_detection].
+
+
+
+
+
+
+
+
+
+
+
+

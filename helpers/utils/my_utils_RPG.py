@@ -1413,7 +1413,7 @@ class MyUtils_RailPathGraph:
     ###=========================================================================================================
     ### MyUtils_RailPathGraph::
     ###=========================================================================================================
-    def _get_paths_by_polynomial_fitting(self, list_paths_as_vertices, list_type_paths, seg_im, n_seg_classes, flg_seg_PP):
+    def _get_paths_by_polynomial_fitting(self, list_paths_as_vertices, n_seg_classes, seg_im, flg):
         """
 
         :param list_paths_as_vertices:
@@ -1426,7 +1426,6 @@ class MyUtils_RailPathGraph:
         param_degree_poly = self.m_param_rpg_poly_fitting_degree
 
 
-        assert len(list_paths_as_vertices) == len(list_type_paths)
 
 
         totnum_paths = len(list_paths_as_vertices)
@@ -1441,32 +1440,27 @@ class MyUtils_RailPathGraph:
             dict_path_this = list_paths_as_vertices[idx_path]
 
             ###
-            arr_xyz_cen_3d = dict_path_this["xy_cen_img"]
-            # print(arr_xyz_cen_3d)
-            arr_xyz_left_3d = dict_path_this["xy_left_img"]
-            arr_xyz_right_3d = dict_path_this["xy_right_img"]
-
-            arr_x_cen_ori = arr_xyz_cen_3d[:, 1]
-            arr_y_cen_ori = arr_xyz_cen_3d[:, 0]
-
-            arr_x_cen_ori_ref = copy.deepcopy(arr_x_cen_ori)
-            arr_y_cen_ori_ref = copy.deepcopy(arr_y_cen_ori)
-
-            arr_x_left_ori  = arr_xyz_left_3d[:, 1]
-            arr_y_left_ori = arr_xyz_left_3d[:, 0]
-
-            arr_x_left_ori_ref = copy.deepcopy(arr_x_left_ori)
-            arr_y_left_ori_ref = copy.deepcopy(arr_y_left_ori)
-
-            arr_x_right_ori  = arr_xyz_right_3d[:, 1]
-            arr_y_right_ori = arr_xyz_right_3d[:, 0]
-
-            arr_x_right_ori_ref = copy.deepcopy(arr_x_right_ori)
-            arr_y_right_ori_ref = copy.deepcopy(arr_y_right_ori)
+            arr_xy_left  = dict_path_this["xy_left_img"]
+            arr_xy_right = dict_path_this["xy_right_img"]
 
 
-            flg = flg_seg_PP
-            method_curve_fitting = 2
+            arr_x_left_ori  = arr_xy_left[:, 1]
+            arr_x_left_ori  = arr_x_left_ori[::-1]
+
+            arr_y_left_ori  = arr_xy_left[:, 0]
+            arr_y_left_ori = arr_y_left_ori[::-1]
+
+            arr_x_right_ori  = arr_xy_right[:, 1]
+            arr_x_right_ori = arr_x_right_ori[::-1]
+
+            arr_y_right_ori  = arr_xy_right[:, 0]
+            arr_y_right_ori = arr_y_right_ori[::-1]
+
+            # arr_y_cen_orii = 0.5*(arr_y_left_ori+arr_y_right_ori)
+            # print(arr_y_cen_orii)
+
+
+
 
             if n_seg_classes == 3:
                 rgb_rail = 232                #254
@@ -1474,10 +1468,9 @@ class MyUtils_RailPathGraph:
                 rgb_rail = 254                #254
 
             if flg is True:
-                for counter in range(len(arr_y_left_ori_ref)-2,-1,-1):
-                    y_left_this = arr_y_left_ori_ref[counter]
-                    x_left_this = arr_x_left_ori_ref[counter]
-                    y_right_this = arr_y_right_ori_ref[counter]
+                for counter in range(len(arr_y_left_ori)-2,-1,-1):
+                    y_left_this = arr_y_left_ori[counter]
+                    x_left_this = arr_x_left_ori[counter]
                     flag_no_change = 0
                     for offset in range(6):
                         if y_left_this-offset>0 and y_left_this+offset<960:
@@ -1490,15 +1483,14 @@ class MyUtils_RailPathGraph:
                                 if seg_im[x_left_this, y_left_this - offset, 0] == rgb_rail and seg_im[x_left_this, y_left_this + offset, 0] != rgb_rail and abs(y_left_this - offset - arr_y_left_ori[counter+1])<10:
                                     arr_y_left_ori[counter] = y_left_this - offset
                                     break
-                                elif seg_im[x_left_this, y_left_this - offset, 0] != rgb_rail and seg_im[x_left_this, y_left_this + offset, 0] == rgb_rail and abs(y_left_this + offset - arr_y_left_ori[counter+1])<10 and y_left_this + offset < arr_y_cen_ori[counter]:
+                                elif seg_im[x_left_this, y_left_this - offset, 0] != rgb_rail and seg_im[x_left_this, y_left_this + offset, 0] == rgb_rail and abs(y_left_this + offset - arr_y_left_ori[counter+1])<10:
                                     arr_y_left_ori[counter] = y_left_this + offset
                                     break
 
             if flg is True:
-                for counter in range(len(arr_y_right_ori_ref)-2,-1,-1):
-                    y_right_this = arr_y_right_ori_ref[counter]
-                    x_right_this = arr_x_right_ori_ref[counter]
-                    y_left_this = arr_y_left_ori_ref[counter]
+                for counter in range(len(arr_y_right_ori)-2,-1,-1):
+                    y_right_this = arr_y_right_ori[counter]
+                    x_right_this = arr_x_right_ori[counter]
                     flag_no_change = 0
                     for offset in range(6):
                         if y_right_this - offset > 0 and y_right_this + offset < 960:
@@ -1508,7 +1500,7 @@ class MyUtils_RailPathGraph:
                     if flag_no_change == 0:
                         for offset in range(6,50):
                             if y_right_this - offset > 0 and y_right_this + offset < 960:
-                                if seg_im[x_right_this, y_right_this - offset, 0] == rgb_rail and seg_im[x_right_this, y_right_this + offset, 0] != rgb_rail and y_right_this - offset > arr_y_cen_ori[counter] and abs(y_right_this - offset - arr_y_right_ori[counter+1])<10:
+                                if seg_im[x_right_this, y_right_this - offset, 0] == rgb_rail and seg_im[x_right_this, y_right_this + offset, 0] != rgb_rail and abs(y_right_this - offset - arr_y_right_ori[counter+1])<10:
                                     arr_y_right_ori[counter] = y_right_this - offset
                                     break
                                 elif seg_im[x_right_this, y_right_this - offset, 0] != rgb_rail and seg_im[x_right_this, y_right_this + offset, 0] == rgb_rail and abs(y_right_this + offset - arr_y_right_ori[counter+1])<10:
@@ -1516,299 +1508,50 @@ class MyUtils_RailPathGraph:
                                     break
 
 
-            coeff_poly_cen = np.polyfit(arr_x_cen_ori, arr_y_cen_ori, param_degree_poly)
-            poly_this = np.poly1d(coeff_poly_cen)
-            sample_arr_x_cen_new = np.linspace(arr_x_cen_ori[-1], arr_x_cen_ori[0], arr_x_cen_ori[0]-arr_x_cen_ori[-1]+1)
-            sample_arr_y_cen_new = poly_this(sample_arr_x_cen_new)
-            sample_arr_xyz_cen_ori_ = np.vstack((sample_arr_y_cen_new, sample_arr_x_cen_new))
-            sample_arr_xyz_cen_ori = sample_arr_xyz_cen_ori_.T
 
-            if len(arr_x_cen_ori) <= 4:
-                continue
+            x_start = min(arr_x_left_ori[-1],arr_x_right_ori[-1])
+            x_end   = max(arr_x_left_ori[0],arr_x_right_ori[0])
 
-            if method_curve_fitting == 0:
-                coeff_poly_left = np.polyfit(arr_x_left_ori, arr_y_left_ori, param_degree_poly)
-                poly_this = np.poly1d(coeff_poly_left)
-                sample_arr_x_left_new = np.linspace(arr_x_right_ori[-1], arr_x_right_ori[0], arr_x_right_ori[0]-arr_x_right_ori[-1]+1)
-                sample_arr_y_left_new = poly_this(sample_arr_x_left_new)
-                sample_arr_xyz_left_ori_ = np.vstack((sample_arr_y_left_new, sample_arr_x_left_new))
-                sample_arr_xyz_left_ori = sample_arr_xyz_left_ori_.T
+            min_residuals = 100000000
+            for param_deg_poly in range(1,4):
+                coeff_poly_left = np.polyfit(arr_x_left_ori, arr_y_left_ori, param_deg_poly, full=True)
+                residual_this   = coeff_poly_left[1][0]
+                if residual_this <= min_residuals:
+                    min_residuals = residual_this
+                    coeff_this = coeff_poly_left[0]
+                    poly_this = np.poly1d(coeff_this)
+            # sample_arr_x_left_new = np.linspace(arr_x_left_ori[-1], arr_x_left_ori[0], arr_x_left_ori[0]-arr_x_left_ori[-1]+1)
+            sample_arr_x_left_new = np.linspace(x_start, x_end, x_end - x_start + 1)
+            sample_arr_y_left_new = poly_this(sample_arr_x_left_new)
+            sample_arr_xyz_left_ori_ = np.vstack((sample_arr_y_left_new, sample_arr_x_left_new))
+            sample_arr_xyz_left_ori = sample_arr_xyz_left_ori_.T
 
-
-                coeff_poly_right = np.polyfit(arr_x_right_ori, arr_y_right_ori, param_degree_poly)
-                poly_this = np.poly1d(coeff_poly_right)
-                sample_arr_x_right_new = np.linspace(arr_x_right_ori[-1], arr_x_right_ori[0], arr_x_right_ori[0]-arr_x_right_ori[-1]+1)
-                sample_arr_y_right_new = poly_this(sample_arr_x_right_new)
-                sample_arr_xyz_right_ori_ = np.vstack((sample_arr_y_right_new, sample_arr_x_right_new))
-                sample_arr_xyz_right_ori = sample_arr_xyz_right_ori_.T
-
-            elif method_curve_fitting == 1:
-
-                ###########################################################################################################################
-                # Left
-                ###########################################################################################################################
-
-                tot_num_sub_secs = 1
-                overall_verical_length = len(arr_x_left_ori)
-                sub_sec_length = overall_verical_length // tot_num_sub_secs
+            min_residuals = 100000000
+            for param_deg_poly in range(1,4):
+                coeff_poly_right = np.polyfit(arr_x_right_ori, arr_y_right_ori, param_deg_poly, full=True)
+                residual_this   = coeff_poly_right[1][0]
+                if residual_this <= min_residuals:
+                    min_residuals = residual_this
+                    coeff_this = coeff_poly_right[0]
+                    poly_this = np.poly1d(coeff_this)
+            # sample_arr_x_right_new = np.linspace(arr_x_right_ori[-1], arr_x_right_ori[0], arr_x_right_ori[0]-arr_x_right_ori[-1]+1)
+            sample_arr_x_right_new = np.linspace(x_start, x_end, x_end - x_start + 1)
+            sample_arr_y_right_new = poly_this(sample_arr_x_right_new)
+            sample_arr_xyz_right_ori_ = np.vstack((sample_arr_y_right_new, sample_arr_x_right_new))
+            sample_arr_xyz_right_ori = sample_arr_xyz_right_ori_.T
 
 
-                sample_arr_x_left_new = []
-                sample_arr_y_left_new = []
-                for sub_sec_index in range(tot_num_sub_secs):
-                    start_index = sub_sec_index * sub_sec_length
-                    if sub_sec_index == tot_num_sub_secs - 1:
-                        end_index = overall_verical_length
-                    else:
-                        end_index = (sub_sec_index + 1) * sub_sec_length
-
-                    arr_x_this = arr_x_left_ori[start_index:end_index]
-                    arr_y_this = arr_y_left_ori[start_index:end_index]
-                    arr_points_this = [ [arr_x_this[cnt],arr_y_this[cnt] ] for cnt in range(len(arr_x_this))]
-                    arr_points_this = np.array(arr_points_this)
-
-                    min_residuals = 1000000
-                    for angle in range(-90,90,4):
-                        rotation_matrix = np.array( [ [math.cos(math.radians(angle)),-math.sin(math.radians(angle))] , [math.sin(math.radians(angle)),math.cos(math.radians(angle))] ] )
-                        rotated_arr_points_this = np.matmul(arr_points_this,rotation_matrix)
-                        rotated_x_this = [item[0] for item in rotated_arr_points_this]
-                        rotated_y_this = [item[1] for item in rotated_arr_points_this]
-                        coeff_poly_left = np.polyfit(rotated_x_this, rotated_y_this, param_degree_poly, full=True)
-                        residual_this = coeff_poly_left[1][0]
-                        if residual_this <= min_residuals:
-                            min_residuals = residual_this
-                            coeff_this    = coeff_poly_left[0]
-                            poly_this     = np.poly1d(coeff_this)
-                            angle_this    = angle
-                            rotation_matrix_this = rotation_matrix
-                            rotated_x_this_ = rotated_x_this
-
-                    start_space = min(int(rotated_x_this_[-1]),int(rotated_x_this_[0]))
-                    end_space   = max(int(rotated_x_this_[-1]), int(rotated_x_this_[0]))
-                    sample_arr_x_left_this = np.linspace(start_space, end_space, 2*(end_space - start_space + 1))
-                    sample_arr_y_left_this = poly_this(sample_arr_x_left_this)
-
-                    arr_points_this_curve_fitted_rotated = np.array( [[sample_arr_x_left_this[cnt], sample_arr_y_left_this[cnt]] for cnt in range(len(sample_arr_x_left_this))] )
-                    arr_points_this_curve_fitted = np.matmul(arr_points_this_curve_fitted_rotated,np.linalg.inv(rotation_matrix_this))
-
-                    if arr_points_this_curve_fitted[0,0] > arr_points_this_curve_fitted[1,0]:
-                        sample_arr_x_left_this = np.array([item[0] for item in arr_points_this_curve_fitted[::-1]])
-                        sample_arr_y_left_this = np.array([item[1] for item in arr_points_this_curve_fitted[::-1]])
-                    else:
-                        sample_arr_x_left_this = np.array([item[0] for item in arr_points_this_curve_fitted])
-                        sample_arr_y_left_this = np.array([item[1] for item in arr_points_this_curve_fitted])
-
-                    # coeff_poly_left = np.polyfit(arr_x_left_ori[start_index:end_index], arr_y_left_ori[start_index:end_index], param_degree_poly, full=True)
-                    # poly_this = np.poly1d(coeff_poly_left[0])
-
-                    # sample_arr_x_left_this = np.linspace(arr_x_left_ori[end_index], arr_x_left_ori[start_index], arr_x_left_ori[start_index] - arr_x_left_ori[end_index] + 1)
-                    # sample_arr_y_left_this = poly_this(sample_arr_x_left_this)
-
-                    for item in sample_arr_x_left_this.tolist():
-                        sample_arr_x_left_new.append(round(item))
-                    for item in sample_arr_y_left_this.tolist():
-                        sample_arr_y_left_new.append(item)
-                sample_arr_xyz_left_ori_ = np.vstack((np.array(sample_arr_y_left_new), np.array(sample_arr_x_left_new)))
-                sample_arr_xyz_left_ori  = sample_arr_xyz_left_ori_.T
-
-                ###########################################################################################################################
-                # RIGHT
-                ###########################################################################################################################
-
-                sample_arr_x_right_new = []
-                sample_arr_y_right_new = []
-                for sub_sec_index in range(tot_num_sub_secs):
-                    start_index = sub_sec_index * sub_sec_length
-                    if sub_sec_index == tot_num_sub_secs - 1:
-                        end_index = overall_verical_length
-                    else:
-                        end_index = (sub_sec_index + 1) * sub_sec_length
-
-                    arr_x_this = arr_x_right_ori[start_index:end_index]
-                    arr_y_this = arr_y_right_ori[start_index:end_index]
-                    arr_points_this = [ [arr_x_this[cnt],arr_y_this[cnt]] for cnt in range(len(arr_x_this))]
-                    arr_points_this = np.array(arr_points_this)
-
-                    min_residuals = 1000000
-                    for angle in range(-90,90,4):
-                        rotation_matrix = np.array( [ [math.cos(math.radians(angle)),-math.sin(math.radians(angle))] , [math.sin(math.radians(angle)),math.cos(math.radians(angle))] ] )
-                        rotated_arr_points_this = np.matmul(arr_points_this,rotation_matrix)
-                        rotated_x_this = [item[0] for item in rotated_arr_points_this]
-                        rotated_y_this = [item[1] for item in rotated_arr_points_this]
-                        coeff_poly_right = np.polyfit(rotated_x_this, rotated_y_this, param_degree_poly, full=True)
-                        residual_this = coeff_poly_right[1][0]
-                        if residual_this <= min_residuals:
-                            min_residuals = residual_this
-                            coeff_this = coeff_poly_right[0]
-                            poly_this = np.poly1d(coeff_this)
-                            angle_this = angle
-                            rotation_matrix_this = rotation_matrix
-                            rotated_x_this_ = rotated_x_this
-
-                    start_space = min(int(rotated_x_this_[-1]),int(rotated_x_this_[0]))
-                    end_space = max(int(rotated_x_this_[-1]), int(rotated_x_this_[0]))
-                    sample_arr_x_right_this = np.linspace(start_space, end_space, 2*(end_space - start_space + 1))
-                    sample_arr_y_right_this = poly_this(sample_arr_x_right_this)
-
-                    arr_points_this_curve_fitted_rotated = np.array( [[sample_arr_x_right_this[cnt], sample_arr_y_right_this[cnt]] for cnt in range(len(sample_arr_x_right_this))] )
-                    arr_points_this_curve_fitted = np.matmul(arr_points_this_curve_fitted_rotated,np.linalg.inv(rotation_matrix_this))
-
-                    if arr_points_this_curve_fitted[0,0] > arr_points_this_curve_fitted[1,0]:
-                        sample_arr_x_right_this = np.array([item[0] for item in arr_points_this_curve_fitted[::-1]])
-                        sample_arr_y_right_this = np.array([item[1] for item in arr_points_this_curve_fitted[::-1]])
-                    else:
-                        sample_arr_x_right_this = np.array([item[0] for item in arr_points_this_curve_fitted])
-                        sample_arr_y_right_this = np.array([item[1] for item in arr_points_this_curve_fitted])
-
-
-                    # coeff_poly_right = np.polyfit(arr_x_right_ori[start_index:end_index], arr_y_right_ori[start_index:end_index], param_degree_poly)
-                    # poly_this = np.poly1d(coeff_poly_right)
-                    #
-                    # sample_arr_x_right_this = np.linspace(arr_x_right_ori[end_index], arr_x_right_ori[start_index], arr_x_right_ori[start_index] - arr_x_right_ori[end_index] + 1)
-                    # sample_arr_y_right_this = poly_this(sample_arr_x_right_this)
-
-                    for item in sample_arr_x_right_this.tolist():
-                        sample_arr_x_right_new.append(round(item))
-                    for item in sample_arr_y_right_this.tolist():
-                        sample_arr_y_right_new.append(item)
-                sample_arr_xyz_right_ori_ = np.vstack((np.array(sample_arr_y_right_new), np.array(sample_arr_x_right_new)))
-                sample_arr_xyz_right_ori  = sample_arr_xyz_right_ori_.T
-
-            elif method_curve_fitting == 2:
-                min_residuals = 1000000
-                for param_deg_poly in range(1,4):
-                    coeff_poly_left = np.polyfit(arr_x_left_ori, arr_y_left_ori, param_deg_poly, full=True)
-                    residual_this   = coeff_poly_left[1][0]
-                    if residual_this <= min_residuals:
-                        min_residuals = residual_this
-                        coeff_this = coeff_poly_left[0]
-                        poly_this = np.poly1d(coeff_this)
-                sample_arr_x_left_new = np.linspace(arr_x_left_ori[-1], arr_x_left_ori[0], arr_x_left_ori[0]-arr_x_left_ori[-1]+1)
-                sample_arr_y_left_new = poly_this(sample_arr_x_left_new)
-                sample_arr_xyz_left_ori_ = np.vstack((sample_arr_y_left_new, sample_arr_x_left_new))
-                sample_arr_xyz_left_ori = sample_arr_xyz_left_ori_.T
-
-                min_residuals = 1000000
-                for param_deg_poly in range(1,4):
-                    coeff_poly_right = np.polyfit(arr_x_right_ori, arr_y_right_ori, param_deg_poly, full=True)
-                    residual_this   = coeff_poly_right[1][0]
-                    if residual_this <= min_residuals:
-                        min_residuals = residual_this
-                        coeff_this = coeff_poly_right[0]
-                        poly_this = np.poly1d(coeff_this)
-                sample_arr_x_right_new = np.linspace(arr_x_right_ori[-1], arr_x_right_ori[0], arr_x_right_ori[0]-arr_x_right_ori[-1]+1)
-                sample_arr_y_right_new = poly_this(sample_arr_x_right_new)
-                sample_arr_xyz_right_ori_ = np.vstack((sample_arr_y_right_new, sample_arr_x_right_new))
-                sample_arr_xyz_right_ori = sample_arr_xyz_right_ori_.T
-
-
-
-            # arr_xyz_cen_3d = dict_path_this["xyz_cen_3d"]
-            # arr_xyz_left_3d = dict_path_this["xyz_left_3d"]
-            # arr_xyz_right_3d = dict_path_this["xyz_right_3d"]
-            #
-            # ###
-            # arr_x_cen_ori = arr_xyz_cen_3d[:, 0]
-            # arr_y_cen_ori = arr_xyz_cen_3d[:, 1]
-            #
-            #
-            # ###---------------------------------------------------------------------------------------
-            # ###
-            # ###---------------------------------------------------------------------------------------
-            # arr_x_left_ori  = arr_xyz_left_3d[:, 0]
-            # arr_x_right_ori = arr_xyz_right_3d[:, 0]
-            #
-            # dx_cen_to_left  = arr_x_cen_ori - arr_x_left_ori
-            # dx_cen_to_right = arr_x_right_ori - arr_x_cen_ori
-            #
-            # mean_dx_cen_to_left  = np.mean(dx_cen_to_left)
-            # mean_dx_cen_to_right = np.mean(dx_cen_to_right)
-            #
-            # assert mean_dx_cen_to_left  >= 0.0
-            # assert mean_dx_cen_to_right >= 0.0
-            #
-            #
-            # ###---------------------------------------------------------------------------------------
-            # ### get data for this path
-            # ###---------------------------------------------------------------------------------------
-            # arr_x_cen_new = arr_y_cen_ori
-            # arr_y_cen_new = -1.0*arr_x_cen_ori
-            #
-            # ### fit polynomial
-            # #coeff_poly = np.polyfit(arr_x_cen_new, arr_y_cen_new, 2)
-            # coeff_poly = np.polyfit(arr_x_cen_new, arr_y_cen_new, param_degree_poly)
-            # poly_this = np.poly1d(coeff_poly)       # note that poly_this is for x_cen_new, y_cen_new
-            #     # completed to get
-            #     #       coeff_poly: ndarr (param_degree_poly + 1, )
-            #     #       poly_this: poly1d
-            #
-            #
-            # ###---------------------------------------------------------------------------------------
-            # ### get sample pnts (cen)
-            # ###---------------------------------------------------------------------------------------
-            # sample_arr_x_cen_new = np.linspace(0, param_y_max, int(param_y_max)*150)    # 150 sample pnts/meter
-            # sample_arr_y_cen_new = poly_this(sample_arr_x_cen_new)
-            #
-            # sample_arr_x_cen_ori = -1.0*sample_arr_y_cen_new
-            # sample_arr_y_cen_ori = sample_arr_x_cen_new
-            # sample_arr_z_cen_ori = np.zeros_like(sample_arr_x_cen_ori)
-            #
-            # ### cen
-            # sample_arr_xyz_cen_ori_ = np.vstack((sample_arr_x_cen_ori, sample_arr_y_cen_ori, sample_arr_z_cen_ori))
-            # sample_arr_xyz_cen_ori = sample_arr_xyz_cen_ori_.T
-            #
-            #
-            # ###---------------------------------------------------------------------------------------
-            # ### get sample pnts (left)
-            # ###---------------------------------------------------------------------------------------
-            # sample_arr_x_left_ori = sample_arr_x_cen_ori - mean_dx_cen_to_left
-            # sample_arr_y_left_ori = sample_arr_y_cen_ori
-            # sample_arr_z_left_ori = sample_arr_z_cen_ori
-            #
-            # sample_arr_xyz_left_ori_ = np.vstack((sample_arr_x_left_ori, sample_arr_y_left_ori, sample_arr_z_left_ori))
-            # sample_arr_xyz_left_ori = sample_arr_xyz_left_ori_.T
-            #
-            #
-            # ###---------------------------------------------------------------------------------------
-            # ### get sample pnts (right)
-            # ###---------------------------------------------------------------------------------------
-            # sample_arr_x_right_ori = sample_arr_x_cen_ori + mean_dx_cen_to_right
-            # sample_arr_y_right_ori = sample_arr_y_cen_ori
-            # sample_arr_z_right_ori = sample_arr_z_cen_ori
-            #
-            # sample_arr_xyz_right_ori_ = np.vstack((sample_arr_x_right_ori, sample_arr_y_right_ori, sample_arr_z_right_ori))
-            # sample_arr_xyz_right_ori = sample_arr_xyz_right_ori_.T
-            #
-            #
-            #
-            # ###---------------------------------------------------------------------------------------
-            # ### get polynomial
-            # ###---------------------------------------------------------------------------------------
-            # coeff_poly_cen   = np.copy(coeff_poly)
-            # coeff_poly_left  = np.copy(coeff_poly)
-            # coeff_poly_right = np.copy(coeff_poly)
-            #
-            # ### left & right
-            # coeff_poly_left[param_degree_poly]  = coeff_poly_cen[param_degree_poly] + mean_dx_cen_to_left
-            # coeff_poly_right[param_degree_poly] = coeff_poly_cen[param_degree_poly] - mean_dx_cen_to_right
-            #
-            #
-            # ##
-            # for item in sample_arr_xyz_cen_ori:
-            #     print(item[0])
-            dict_path_poly_this = {"xyz_cen_3d"              : sample_arr_xyz_cen_ori,
-                                   "xyz_left_3d"             : sample_arr_xyz_left_ori,
-                                   "xyz_right_3d"            : sample_arr_xyz_right_ori,
-                                   "coeff_poly_cen_3d_new"   : coeff_poly_cen,
-                                   "coeff_poly_left_3d_new"  : coeff_poly_left,
-                                   "coeff_poly_right_3d_new" : coeff_poly_right}
+            dict_path_poly_this = {
+                                   "xy_left"             : sample_arr_xyz_left_ori,
+                                   "xy_right"            : sample_arr_xyz_right_ori,
+                                   "coeff_poly_left"     : coeff_poly_left,
+                                   "coeff_poly_right"    : coeff_poly_right}
 
             ###---------------------------------------------------------------------------------------
             ### store
             ###---------------------------------------------------------------------------------------
             dict_path_final = {"extracted": dict_path_this,
-                               "polynomial": dict_path_poly_this,
-                               "type_path": list_type_paths[idx_path]}
+                               "polynomial": dict_path_poly_this}
 
             list_paths_out.append(dict_path_final)
         #end

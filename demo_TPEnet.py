@@ -1,31 +1,57 @@
 # 2020/8/11
 # Jungwon Kang
 
-
+import numpy as np
 import os
 import re
 import pickle
 import cv2
 import json
-import numpy as np
-import copy
-import sys
 import nums_from_string
-import torch
+import my_args_TPEnet
 
 
 import PE_TPEnet
-from helpers.utils import my_utils_img
+from helpers.utils import my_utils_img, evaluation_utils
+from helpers.utils import my_helper_GT
+from helpers.utils import evaluation_utils
 
 
+title_testrun_this = 'TEST7_RUN2_NRS_GOPRO'
+w_img = 960
+dx_valid_a = 0
+dx_valid_b = 0
+
+fname_pathlabel_gt_in = './in/gt_label/res_pathlabel_test7_nrs2_20210824.pickle'
+with open(fname_pathlabel_gt_in, 'rb') as fh:
+    list_pathlabel_gt_in = pickle.load(fh)
+#end
+
+obj_helper_GT = my_helper_GT.MyHelper_GT(title_testrun_this, w_img, dx_valid_a, dx_valid_b)
 
 ###==================================================================================================================
 ### 1. set parameters
 ###==================================================================================================================
 dim_instance_vectors = 16
+dim_segmentation_vectors = 3
+architecture         = 0
 flag_save_img        = 0
-flag_save_data       = 0
-data_in_use          = 1   # 0 for RailSem19 - 1 for others in which GT data is missing
+flag_save_data       = 1
+data_in_use          = 0   # 0 for RailSem19 - 1 for others in which GT data is missing
+flag_ydhr            = False
+flag_seg_in_PP = True
+
+### define args
+DATASET_for_use = 0
+parser_oper = my_args_TPEnet.define_args_operation(DATASET_for_use, architecture)
+parser_alg  = my_args_TPEnet.define_args_algorithm(DATASET_for_use, architecture)
+
+### parse
+args_oper = parser_oper.parse_args()
+args_alg  = parser_alg.parse_args()
+
+### set values for some args
+args_alg = my_args_TPEnet.set_value_for_args_algorithm(DATASET_for_use, args_alg)
 
 ###==================================================================================================================
 ### 2. init
@@ -35,15 +61,18 @@ obj_my_utils_img = my_utils_img.MyUtils_Image()
 ###==================================================================================================================
 ### 3. loop
 ###==================================================================================================================
-dir_input           = "./sample_input_imgs/validation"
-dir_weight          = "./net_weight/Mybest_7000.pkl"
+dir_input           = "./sample_input_imgs/resized_railsem"
+dir_weight          = "./net_weight/Mybest_39300.pkl"
+
 
 list_fnames_img = os.listdir(dir_input)
 list_fnames_img.sort(key=lambda f: int(re.sub('\D', '', f)))
 
-PathExtractor = PE_TPEnet.PathExtraction_TPEnet(dim_instance_vectors, dir_weight)
+PathExtractor = PE_TPEnet.PathExtraction_TPEnet(args_alg, dim_instance_vectors, dim_segmentation_vectors, dir_weight, flag_seg_in_PP)
+
+res_eval = []
 for my_idx,fname_img_in in enumerate(list_fnames_img):
-    if my_idx == 51:
+    if my_idx <= 1500:
         pass
     else:
         continue
@@ -57,12 +86,16 @@ for my_idx,fname_img_in in enumerate(list_fnames_img):
 
     img_raw_rsz_uint8    = cv2.imread(full_fname_img_ori)
     # binary_seg_mask_json = json.load(open('./instance_segmentation_binary_json/rs' + f"{my_idx+6000:05d}" + '.txt', 'r'))
-    binary_seg_mask_json = json.load(open('./instance_seg_bin_json_reduced/rs' + f"{my_idx + 6000:05d}" + '.txt', 'r'))
+    binary_seg_mask_json_GT = json.load(open('./instance_seg_bin_json_reduced/rs' + f"{my_idx + 6000:05d}" + '.txt', 'r'))
 
     ###------------------------------------------------------------------------------------------------
     ### 3-2. process
     ###------------------------------------------------------------------------------------------------
-    jojo = PathExtractor.process(img_raw_rsz_uint8,binary_seg_mask_json)    # img_raw_rsz_uint8: sensor data
+    labels, list_res_paths, model_seg_output, img_res_seg, img_res_centerness, dict_res_time  = PathExtractor.process(img_raw_rsz_uint8,binary_seg_mask_json_GT)
+
+    labels_seg_predicted = np.squeeze(model_seg_output.data.max(1)[1].cpu().numpy(), axis=0)
+    final_im = PathExtractor.show_final_path_on_ori_v0(list_res_paths, img_raw_rsz_uint8)
+
     # print(type(jojo))
     # print(jojo.shape)
 
@@ -70,7 +103,7 @@ for my_idx,fname_img_in in enumerate(list_fnames_img):
     ###------------------------------------------------------------------------------------------------
     ### 3.3 PERFORMANCE METRICS CREATION
     ###------------------------------------------------------------------------------------------------
-    if 0:
+    if 1:
         img_idx = nums_from_string.get_nums(list_fnames_img[my_idx])[0]
         if data_in_use == 0 or (data_in_use == 1 and flag_ydhr == True):
 
@@ -96,25 +129,18 @@ for my_idx,fname_img_in in enumerate(list_fnames_img):
 
             else:
                 gt_final_dict_xs_img_rail_LR = json.load(open("railsem_jsons_test_modified2/railsem_jsons_test_modified" + str(my_idx) + ".json", 'r'))
-                if num_seg_classes == 3:
-                    gt_segmentation = cv2.imread("./rs19_val_modified/rs" + f"{my_idx+7000:05d}" + ".png", cv2.IMREAD_GRAYSCALE)
-                if num_seg_classes == 19:
-                    gt_segmentation = cv2.imread("./rs19_val/rs" + f"{my_idx + 7000:05d}" + ".png", cv2.IMREAD_GRAYSCALE)
+                gt_segmentation = cv2.imread("./rs19_val_modified/rs" + f"{my_idx+7000:05d}" + ".png", cv2.IMREAD_GRAYSCALE)
                 gt_segmentation = cv2.resize(gt_segmentation, (img_raw_rsz_uint8.shape[1], img_raw_rsz_uint8.shape[0]))
 
                 evaluator_seg = evaluation_utils.eval_seg_object(gt_segmentation, labels_seg_predicted,
                                                                  image_height=img_raw_rsz_uint8.shape[0],
                                                                  image_width=img_raw_rsz_uint8.shape[1])
 
-                if num_seg_classes == 3:
-                    IoU_rail_region = evaluator_seg.calculate_IoU(class_this=0)
-                    IoU_rail = evaluator_seg.calculate_IoU(class_this=1)
-                    IoU_background = evaluator_seg.calculate_IoU(class_this=2)
+                IoU_rail_region = evaluator_seg.calculate_IoU(class_this=0)
+                IoU_rail = evaluator_seg.calculate_IoU(class_this=1)
+                IoU_background = evaluator_seg.calculate_IoU(class_this=2)
 
-                if num_seg_classes == 19:
-                    IoU_rail_region = evaluator_seg.calculate_IoU(class_this=12)
-                    IoU_rail = evaluator_seg.calculate_IoU(class_this=17)
-                    IoU_background = evaluator_seg.calculate_IoU(class_this=3)
+
 
             ### 3.5.1 create evaluator objects
             evaluator_topolgy = evaluation_utils.eval_object_topology(gt_final_dict_xs_img_rail_LR, list_res_paths, image_height = img_raw_rsz_uint8.shape[0], image_width = img_raw_rsz_uint8.shape[1])
@@ -180,6 +206,9 @@ for my_idx,fname_img_in in enumerate(list_fnames_img):
             # pass
             image_showing_evaluation_res = PathExtractor.show_final_path_on_ori_noGTdata(img_raw_rsz_uint8,list_res_paths)
 
+    # cv2.imshow('final_res', image_showing_evaluation_res)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
     if flag_save_img == 1:
         cv2.imwrite("IMG/resluting_image_" + str(img_idx) + ".jpg", image_showing_evaluation_res)
@@ -207,7 +236,7 @@ sum_IoU_background  = 0
 sum_time_net = 0
 sum_time_pp  = 0
 if flag_save_data == 1 and (data_in_use == 0 or (data_in_use == 1 and flag_ydhr == True)):
-    with open('../../Performance Metrics/precision_1.txt', 'w') as f:
+    with open('../Performance Metrics/precision_1.txt', 'w') as f:
         for item in res_eval:
             prec = item["precision"]
             f.write('%f' % prec)
@@ -228,26 +257,26 @@ if flag_save_data == 1 and (data_in_use == 0 or (data_in_use == 1 and flag_ydhr 
             sum_time_net += item["time_net"]
             sum_time_pp  += item["time_pp"]
 
-    with open('../../Performance Metrics/recall_1.txt', 'w') as f:
+    with open('../Performance Metrics/recall_1.txt', 'w') as f:
         for item in res_eval:
             rec = item["recall"]
             f.write('%f' % rec)
             f.write("\n")
             sum_rec = sum_rec + rec
 
-    with open('../../Performance Metrics/TP_1.txt', 'w') as f:
+    with open('../Performance Metrics/TP_1.txt', 'w') as f:
         for item in res_eval:
             TP = item["TP"]
             f.write('%d' % TP)
             f.write("\n")
 
-    with open('../../Performance Metrics/FP_1.txt', 'w') as f:
+    with open('../Performance Metrics/FP_1.txt', 'w') as f:
         for item in res_eval:
             FP = item["FP"]
             f.write('%d' % FP)
             f.write("\n")
 
-    with open('../../Performance Metrics/FN_1.txt', 'w') as f:
+    with open('../Performance Metrics/FN_1.txt', 'w') as f:
         for item in res_eval:
             FN = item["FN"]
             f.write('%d' % FN)

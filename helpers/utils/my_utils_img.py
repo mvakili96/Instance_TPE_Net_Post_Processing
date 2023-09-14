@@ -665,7 +665,7 @@ class MyUtils_Image:
     ###############################################################################################################
     ###
     ###############################################################################################################
-    def extract_triplet_pnts_localmax(self, res_centerness, res_left, res_right, obj_utils_3D, img_raw_rsz_uint8):
+    def extract_triplet_pnts_localmax(self, res_centerness, res_left, res_right, obj_utils_3D):
         """
         extract triplet points (only local maxima of triplet points)
 

@@ -28,7 +28,7 @@ class PathExtraction_TPEnet:
     ###=========================================================================================================
     ### __init__()
     ###=========================================================================================================
-    def __init__(self, dim_ins_vectors, dir_weight_file):
+    def __init__(self, args, dim_ins_vectors, dim_seg_vectors, dir_weight_file, seg_in_PP):
         """
         initialize
 
@@ -36,6 +36,7 @@ class PathExtraction_TPEnet:
         """
 
         self.dim_ins_vectors = dim_ins_vectors
+        self.seg_in_PP = seg_in_PP
 
 
 
@@ -50,13 +51,25 @@ class PathExtraction_TPEnet:
         ###---------------------------------------------------------------------------------------------
         self.m_obj_utils_net = my_utils_net.MyUtils_Net(dict_args_net)
 
+
+        dict_args_net, \
+        dict_args_triplet, \
+        dict_args_3D_ipm, \
+        dict_args_rpg = self.arrange_args(args)
+
+        self.m_obj_utils_img = my_utils_img.MyUtils_Image(dict_args_triplet)
+        self.m_obj_utils_3D  = my_utils_3D.MyUtils_3D(dict_args_3D_ipm)
+        self.m_obj_utils_rpg = my_utils_RPG.MyUtils_RailPathGraph(dict_args_rpg)
+
+
+
         ###---------------------------------------------------------------------------------------------
         ### init model
         ###---------------------------------------------------------------------------------------------
         self.m_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         ###
-        self.m_model = get_model({"arch": "TPEnet_a"}, dim_ins_vectors)
+        self.m_model = get_model({"arch": "TPEnet_b"}, dim_ins_vectors, dim_seg_vectors)
 
         ###
         self.m_obj_utils_net.load_weights_to_model(self.m_model)
@@ -74,9 +87,74 @@ class PathExtraction_TPEnet:
 
 
     ###=========================================================================================================
+    ### arrange args
+    ###=========================================================================================================
+    def arrange_args(self, args):
+        """
+        See <my_args_TPEnet.py>
+        :param args:
+        :return:
+        """
+
+        ###
+        dict_args_net = {}
+        dict_args_triplet = {}
+        dict_args_3D_ipm = {}
+        dict_args_rpg = {}
+
+
+        ###---------------------------------------------------------------------------------------
+        ###
+        ###---------------------------------------------------------------------------------------
+        dict_args_net["file_weight"] = args.file_weight
+
+
+        ###---------------------------------------------------------------------------------------
+        ###
+        ###---------------------------------------------------------------------------------------
+        dict_args_triplet["param_triplet_nms_alpha"] = args.param_triplet_nms_alpha
+        dict_args_triplet["param_triplet_nms_beta"]  = args.param_triplet_nms_beta
+        dict_args_triplet["param_triplet_nms_min"]   = args.param_triplet_nms_min
+        dict_args_triplet["param_triplet_nms_scale"] = args.param_triplet_nms_scale
+
+
+        ###---------------------------------------------------------------------------------------
+        ###
+        ###---------------------------------------------------------------------------------------
+        dict_args_3D_ipm["param_3D_ipm_camera_intrinsic_matrix"]     = args.param_3D_ipm_camera_intrinsic_matrix
+        dict_args_3D_ipm["param_3D_ipm_camera_pitch_angle"]          = args.param_3D_ipm_camera_pitch_angle
+        dict_args_3D_ipm["param_3D_ipm_camera_pos_wrt_ground_plane"] = args.param_3D_ipm_camera_pos_wrt_ground_plane
+        dict_args_3D_ipm["param_3D_ipm_img_pixel_per_meter"]         = args.param_3D_ipm_img_pixel_per_meter
+        dict_args_3D_ipm["param_3D_ipm_img_height"]                  = args.param_3D_ipm_img_height
+        dict_args_3D_ipm["param_3D_ipm_img_width"]                   = args.param_3D_ipm_img_width
+
+
+        ###---------------------------------------------------------------------------------------
+        ###
+        ###---------------------------------------------------------------------------------------
+        dict_args_rpg["param_rpg_subedge_thres_dx_3d"]       = args.param_rpg_subedge_thres_dx_3d
+        dict_args_rpg["param_rpg_subedge_thres_dy_img"]      = args.param_rpg_subedge_thres_dy_img
+        dict_args_rpg["param_rpg_subedge_height_section"]    = args.param_rpg_subedge_height_section
+
+        dict_args_rpg["param_rpg_nodeedge_thres_dist_img_for_seed"] = args.param_rpg_nodeedge_thres_dist_img_for_seed
+        dict_args_rpg["param_rpg_nodeedge_thres_dx_3d"]             = args.param_rpg_nodeedge_thres_dx_3d
+        dict_args_rpg["param_rpg_nodeedge_thres_dy_img"]            = args.param_rpg_nodeedge_thres_dy_img
+
+        dict_args_rpg["param_rpg_path_vertices_valid_y_min"] = args.param_rpg_path_vertices_valid_y_min
+
+        dict_args_rpg["param_rpg_poly_fitting_y_max"]        = args.param_rpg_poly_fitting_y_max
+        dict_args_rpg["param_rpg_poly_fitting_degree"]       = args.param_rpg_poly_fitting_degree
+
+
+
+        return dict_args_net, dict_args_triplet, dict_args_3D_ipm, dict_args_rpg
+    #end
+
+
+    ###=========================================================================================================
     ### process()
     ###=========================================================================================================
-    def process(self, img_raw_rsz_uint8,binary_seg_mask_json):
+    def process(self, img_raw_rsz_uint8,binary_seg_mask_json_GT):
         """
 
         :param img_raw_rsz_uint8: input image (3ch: rgb)
@@ -103,29 +181,174 @@ class PathExtraction_TPEnet:
 
         ### sample time
         time_a = time.time()
-        output_instance_segmentation = self.m_model(images)
+        output_instance_segmentation, output_semantic_segmentation, output_centerline  = self.m_model(images)
 
         ### sample time
         time_b   = time.time()
         dtime_ab = time_b - time_a
 
+        ###------------------------------------------------------------------------------------------------
+        ### 3. decode network_output (& create img for visualization)
+        ###------------------------------------------------------------------------------------------------
+        ### decode output_seg
+        labels_seg_predicted = np.squeeze(output_semantic_segmentation.data.max(1)[1].cpu().numpy(), axis=0)
+        if 1:
+            img_res_seg = self.m_obj_utils_img.decode_segmap(labels_seg_predicted)
+            # cv2.imshow("Seg",img_res_seg)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
+
+        ### decode output_centerness
+        res_centerness_direct, \
+        img_res_centerness_direct = self.m_obj_utils_img.decode_output_centerness(output_centerline, 1)
+
+        # cv2.imshow("Combined_Centerness",img_res_centerness_direct)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+
 
         ###------------------------------------------------------------------------------------------------
-        ### 3. get instance segmentation final outcome
+        ### 4. extract triplet points
+        ###------------------------------------------------------------------------------------------------
+        res_left  = None
+        res_right = None
+        list_dict_triplet_pnts_local_max = self.m_obj_utils_img.extract_triplet_pnts_localmax(res_centerness_direct, res_left, res_right, self.m_obj_utils_3D)
+
+        if len(np.array(list_dict_triplet_pnts_local_max).reshape(-1,1)) == 0:
+            dict_res_time = {"dtime_ab": 0.01,
+                             "dtime_bc": 0.01
+                             }
+            return None, [], output_semantic_segmentation ,img_res_seg, img_res_centerness_direct, dict_res_time
+
+
+        ###------------------------------------------------------------------------------------------------
+        ### 5. get instance segmentation final outcome
         ###------------------------------------------------------------------------------------------------
         output_instance_segmentation = output_instance_segmentation[0].transpose(0, 1).transpose(1, 2).contiguous()
         output_instance_segmentation = output_instance_segmentation.detach().cpu().numpy()
 
+        ###------------------------------------------------------------------------------------------------
+        ### 5. make and apply binary mask from centerline outcome
+        ###------------------------------------------------------------------------------------------------
+        binary_seg_mask_json = []
+        for list_this in list_dict_triplet_pnts_local_max:
+            if len(list_this) != 0:
+                for dict_this in list_this:
+                    binary_seg_mask_json.append([dict_this["xy_left_img"][1],dict_this["xy_left_img"][0]])
+                    binary_seg_mask_json.append([dict_this["xy_right_img"][1], dict_this["xy_right_img"][0]])
+
+
+
         binary_seg_mask_json = np.array(binary_seg_mask_json)
         vectors = output_instance_segmentation[binary_seg_mask_json[:,0],binary_seg_mask_json[:,1]]
 
+        ###------------------------------------------------------------------------------------------------
+        ### 6. Clustering
+        ###------------------------------------------------------------------------------------------------
 
         vectors = np.array(vectors)
         clustering = MeanShift(bandwidth=1).fit(vectors)
         labels = clustering.labels_
 
 
-        image_outcome_instances = self.Create_ins_seg_image(labels,binary_seg_mask_json)
+        ###------------------------------------------------------------------------------------------------
+        ### 7. Left/Right rail association
+        ###------------------------------------------------------------------------------------------------
+        tot_num_instances  = max(labels) + 1
+        association_matrix = np.zeros((tot_num_instances,tot_num_instances))
+
+        tot_num_mask_points = labels.shape[0]
+        for cntr in range(0,tot_num_mask_points,2):
+            id_rail_this = labels[cntr]
+            id_rail_next = labels[cntr+1]
+            association_matrix[id_rail_this][id_rail_next] += 1
+
+        rail_pairs = np.argwhere(association_matrix > 55)
+        list_paths_as_vertices = [{"xy_left_img": None, "xy_right_img": None} for counter in range(len(rail_pairs))]
+
+        binary_seg_mask = np.array([[pixel[1],pixel[0]] for pixel in binary_seg_mask_json])
+        for pair_id,pair_this in enumerate(rail_pairs):
+            left_rail_id  = pair_this[0]
+            right_rail_id = pair_this[1]
+
+            left_rail_pixels_indices  = np.argwhere(labels == left_rail_id).reshape(-1)
+            right_rail_pixels_indices = np.argwhere(labels == right_rail_id).reshape(-1)
+
+            left_rail_pixels  = binary_seg_mask[left_rail_pixels_indices]
+            right_rail_pixels = binary_seg_mask[right_rail_pixels_indices]
+
+            list_paths_as_vertices[pair_id]["xy_left_img"]  = left_rail_pixels
+            list_paths_as_vertices[pair_id]["xy_right_img"] = right_rail_pixels
+
+
+        list_paths_final = self.m_obj_utils_rpg._get_paths_by_polynomial_fitting(list_paths_as_vertices, 3, img_res_seg, self.seg_in_PP)
+
+        ###------------------------------------------------------------------------------------------------
+        ### 8. Prune unwanted paths
+        ###------------------------------------------------------------------------------------------------
+        rejected = []
+        accepted = []
+        for id_path in range(len(list_paths_final)-1):
+            enumerator = 0
+            pnts_this = list_paths_final[id_path]["extracted"]["xy_left_img"]
+            pnts_next = list_paths_final[id_path+1]["extracted"]["xy_left_img"]
+            for counter in range(min(len(pnts_this),len(pnts_next))):
+                if pnts_this[counter][0] == pnts_next[counter][0] and pnts_this[counter][1] == pnts_next[counter][1]:
+                    enumerator += 1
+
+            if enumerator/min(len(pnts_this),len(pnts_next)) > 0.8 and (min(len(pnts_this),len(pnts_next))/max(len(pnts_this),len(pnts_next))<0.8 or min(len(pnts_this),len(pnts_next))/max(len(pnts_this),len(pnts_next))>0.996):
+                # print(id_path)
+                # print(id_path+1)
+                # print("*****************************************")
+                if len(pnts_this)<len(pnts_next):
+                    if (id_path+1 not in accepted) and (id_path+1 not in rejected):
+                        accepted.append(id_path+1)
+                    rejected.append(id_path)
+                else:
+                    if (id_path not in accepted) and (id_path not in rejected):
+                        accepted.append(id_path)
+                    rejected.append(id_path+1)
+
+            else:
+                if id_path not in accepted and id_path not in rejected:
+                    accepted.append(id_path)
+                if id_path+1 not in accepted and id_path+1 not in rejected:
+                    accepted.append(id_path+1)
+        list_paths_final = [list_paths_final[i] for i in range(len(list_paths_final)) if i not in rejected]
+
+        if len(list_paths_final) > 1:
+            rejected = []
+            accepted = []
+            lengths = []
+            for id_path in range(len(list_paths_final)):
+                pnts_this = list_paths_final[id_path]["extracted"]["xy_left_img"]
+                len_this = abs(pnts_this[0][1]-pnts_this[-1][1])
+                lengths.append(len_this)
+            max_len = max(lengths)
+            for id_path in range(len(list_paths_final)):
+                pnts_this = list_paths_final[id_path]["extracted"]["xy_left_img"]
+                len_this = abs(pnts_this[0][1]-pnts_this[-1][1])
+                if len_this/max_len < 0.86:
+                    rejected.append(id_path)
+            list_paths_final = [list_paths_final[i] for i in range(len(list_paths_final)) if i not in rejected]
+
+
+
+        for id_path in range(len(list_paths_final)):
+            id_start_point = -1
+            pnts_left = list_paths_final[id_path]["polynomial"]['xy_left']
+            pnts_right = list_paths_final[id_path]["polynomial"]['xy_right']
+            for id_point in range(min(len(pnts_right),len(pnts_left))):
+                if pnts_right[id_point,0] - pnts_left[id_point,0]<0:
+                    id_start_point = id_point
+            if id_start_point>0:
+                list_paths_final[id_path]["polynomial"]['xy_left'] = list_paths_final[id_path]["polynomial"]['xy_left'][id_start_point:-1]
+                list_paths_final[id_path]["polynomial"]['xy_right'] = list_paths_final[id_path]["polynomial"]['xy_right'][id_start_point:-1]
+
+
+
+
+        # image_outcome_instances = self.Create_ins_seg_image(labels,binary_seg_mask_json)
 
         # DEBUG (show binary image)
         if 0:
@@ -194,7 +417,7 @@ class PathExtraction_TPEnet:
                          }
 
 
-        return labels
+        return labels, list_paths_final, output_semantic_segmentation, img_res_seg, img_res_centerness_direct, dict_res_time
 
 
     #end
@@ -372,8 +595,10 @@ class PathExtraction_TPEnet:
     def show_final_path_on_ori_noGTdata(self, raw_image, list_paths_final):
         points_ref = []
         for detected_path_index in range(len(list_paths_final)):
-            detected_3d_left = list_paths_final[detected_path_index]["polynomial"]["xyz_left_3d"]
-            detected_3d_right = list_paths_final[detected_path_index]["polynomial"]["xyz_right_3d"]
+            detected_3d_left = list_paths_final[detected_path_index]["polynomial"]["xy_left"]
+            detected_3d_right = list_paths_final[detected_path_index]["polynomial"]["xy_right"]
+            print(len(detected_3d_left))
+            print(len(detected_3d_right))
             for idx_pnt in range(detected_3d_left.shape[0]):  # Loop for detected points (left) to create binary image
                 x3d_detected_left = detected_3d_left[idx_pnt][0]
                 y3d_detected_left = detected_3d_left[idx_pnt][1]
@@ -410,7 +635,6 @@ class PathExtraction_TPEnet:
                 cv2.circle(raw_image, center=(ximg_detected_int_right, yimg_detected_int_right), radius=2,
                            color=(0, 70, 255), thickness=-1)
             # all_res_images.append(img_cp)
-
 
 
         return raw_image

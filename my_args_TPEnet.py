@@ -25,15 +25,24 @@ def str2bool(argument):
 ########################################################################################################################
 ### define parameters for operation (outside PE_TPEnet)
 ########################################################################################################################
-def define_args_operation(DATASET_for_use):
+def define_args_operation(DATASET_for_use, architecture):
     parser = argparse.ArgumentParser(description="Params_operation")
 
     if DATASET_for_use == 0:
         ###===================================================================================================
         ### For YDHR
         ###===================================================================================================
-        parser.add_argument('--size_img_process', type=int, default={'h': 540, 'w': 960}, help='image size used in a process')
-        parser.add_argument('--dir_input', type=str, default="./sample_input_imgs/ydhr", help='directory for input images')
+        if architecture == 0:
+            parser.add_argument('--size_img_process', type=int, default={'h': 540, 'w': 960}, help='image size used in a process')
+        elif architecture == 1:
+            parser.add_argument('--size_img_process', type=int, default={'h': 540, 'w': 960}, help='image size used in a process')
+        elif architecture == 2:
+            parser.add_argument('--size_img_process', type=int, default={'h': 540, 'w': 960}, help='image size used in a process')
+        elif architecture == 3:
+            parser.add_argument('--size_img_process', type=int, default={'h': 540, 'w': 960}, help='image size used in a process')
+
+
+        parser.add_argument('--dir_input', type=str, default="./sample_input_imgs/resized_railsem", help='directory for input images')
         parser.add_argument('--dir_output', type=str, default="./res_imgs", help='directory for output images')
         parser.add_argument('--b_save_res_imgs_as_file', type=str2bool, nargs='?', const=True, default=False, help='Save res imgs as file?')
     elif DATASET_for_use == 1:
@@ -64,7 +73,7 @@ def define_args_operation(DATASET_for_use):
 ########################################################################################################################
 ### define parameters for algorithm (inside PE_TPEnet)
 ########################################################################################################################
-def define_args_algorithm(DATASET_for_use):
+def define_args_algorithm(DATASET_for_use, architecture):
     parser = argparse.ArgumentParser(description="Params_algorithm")
 
 
@@ -77,16 +86,14 @@ def define_args_algorithm(DATASET_for_use):
         parser.add_argument('--b_create_imgs_res_interim', type=str2bool, nargs='?', const=True, default=False, help='create interim res images')
 
         ### network weight
-        # TPEnet_a_weights_20800
-        # Mybest_7000_30000_only_cen
-        # Mybest_7000_39000_2_only_cen_noseg          Mybest_7000_83700_2_only_cen
-        parser.add_argument('--file_weight', type=str, default="./net_weight/Mybest_219gooz01.pkl", help='location of network weight file')
+        parser.add_argument('--file_weight', type=str, default="./net_weight/Mybest_219gooo01.pkl", help='location of network weight file')
 
         ### params for detection of local maxima triplets
         parser.add_argument('--param_triplet_nms_alpha', type=float, default=235.0/270.0, help='param (alpha) for detection of local maxima triplets')
         parser.add_argument('--param_triplet_nms_beta', type=float, default=-220.0, help='param (beta) for detection of local maxima triplets')
         parser.add_argument('--param_triplet_nms_min', type=float, default=15.0, help='param (min) for detection of local maxima triplets')
         parser.add_argument('--param_triplet_nms_scale', type=float, default=0.1, help='param (scale) for detection of local maxima triplets')
+
 
         ### params for inverse perspective mapping (for 3d data) -> would be re-set by set_value_for_args_algorithm()
         parser.add_argument('--param_3D_ipm_camera_intrinsic_matrix', type=float, default=np.zeros(shape=(3,3)), help='param for 3D data - camera intrinsic matrix')
